@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "90:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - frontend-net
+
+  backend:
+    build: ./backend
+    volumes:
+      - ./logs:/app/logs
+    ports:
+      - "9000:9000"
+    environment:
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - DB_NAME=${DB_NAME}
+    networks:
+      - frontend-net
+
+  postgres:
+    image: postgres:latest
+    container_name: postgres
+    restart: always
+    shm_size: 128mb
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASS}
+      - POSTGRES_DB=${DB_NAME}
+    ports:
+      - "7178:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - frontend-net
+
+networks:
+  frontend-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
