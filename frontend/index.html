@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apache Log Analyzer</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .chart-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .stats-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .loading {
+            color: #666;
+            font-style: italic;
+        }
+        .error {
+            color: red;
+        }
+        #ipCheckContainer {
+            margin-top: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        #ipInput {
+            padding: 8px;
+            width: 200px;
+            margin-right: 10px;
+        }
+        #ipInfo {
+            margin-top: 15px;
+            padding: 10px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="stats-header">
+        <h1>Apache Access Log Analyzer</h1>
+        <div>
+            <button id="refreshBtn">Refresh Data</button>
+            <button onclick="window.location.href='upload.html'">Upload Logs</button>
+            <span id="lastUpdated"></span>
+        </div>
+    </div>
+    
+    
+    <div id="summaryStats"></div>
+    
+    <div class="dashboard">
+        <div class="chart-container">
+            <h2>Daily Visits</h2>
+            <canvas id="dailyChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <h2>Hourly Distribution</h2>
+            <canvas id="hourlyChart"></canvas>
+        </div>
+    </div>
+    
+    <div class="chart-container" style="margin-top: 20px;">
+        <h2>Top 20 Visitor IPs</h2>
+        <table id="ipTable">
+            <thead>
+                <tr>
+                    <th>IP Address</th>
+                    <th>Visits</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="ipTableBody"></tbody>
+        </table>
+    </div>
+
+    <div id="ipCheckContainer" class="chart-container">
+        <h2>IP Information Check</h2>
+        <div>
+            <input type="text" id="ipInput" placeholder="Enter IP address">
+            <button id="checkIpBtn">Check IP</button>
+        </div>
+        <div id="ipInfo"></div>
+    </div>
+
+    <script>
+        let dailyChart, hourlyChart;
+        
+        document.getElementById('refreshBtn').addEventListener('click', fetchLogData);
+        document.getElementById('checkIpBtn').addEventListener('click', checkIpInfo);
+        
+        // Initial load
+        document.addEventListener('DOMContentLoaded', fetchLogData);
+
+        async function fetchLogData() {
+            document.getElementById('summaryStats').innerHTML = '<p class="loading">Loading statistics...</p>';
+            
+            await fetch('/api/logs')
+                .then(response => {
+                    if (!response.ok) throw new Error('Network response was not ok');
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+                    updateDashboard(data);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    document.getElementById('summaryStats').innerHTML = 
+                        `<p class="error">Error: ${error.message}</p>`;
+                });
+        }
+
+        async function updateDashboard(data) {
+            // Update summary stats
+            document.getElementById('summaryStats').innerHTML = `
+                <p><strong>Total Visits:</strong> ${data.total_visits.toLocaleString()}</p>
+                <p><strong>Unique IPs:</strong> ${data.unique_ips.toLocaleString()}</p>
+            `;
+            
+            document.getElementById('lastUpdated').textContent = `Last updated: ${data.last_updated}`;
+            
+            // Update daily chart
+            updateChart(
+                'dailyChart', 
+                Object.keys(data.daily), 
+                Object.values(data.daily), 
+                'Visits per day',
+                'rgba(54, 162, 235, 0.5)'
+            );
+            
+            // Update hourly chart
+            updateChart(
+                'hourlyChart', 
+                Object.keys(data.hourly).map(h => `${h}:00`), 
+                Object.values(data.hourly), 
+                'Visits per hour',
+                'rgba(255, 99, 132, 0.5)'
+            );
+            
+            // Update IP table
+            const ipTableBody = document.getElementById('ipTableBody');
+            ipTableBody.innerHTML = '';
+            Object.entries(data.ips).forEach(([ip, count]) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${ip}</td>
+                    <td>${count.toLocaleString()}</td>
+                    <td><button class="checkIpBtn" data-ip="${ip}">Check</button></td>
+                `;
+                ipTableBody.appendChild(row);
+            });
+
+            // Add event listeners to all check buttons
+            document.querySelectorAll('.checkIpBtn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.getElementById('ipInput').value = this.getAttribute('data-ip');
+                    checkIpInfo();
+                });
+            });
+        }
+
+        function updateChart(canvasId, labels, data, label, backgroundColor) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            
+            // Destroy previous chart if it exists
+            if (canvasId === 'dailyChart' && dailyChart) {
+                dailyChart.destroy();
+            } else if (canvasId === 'hourlyChart' && hourlyChart) {
+                hourlyChart.destroy();
+            }
+            
+            const config = {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: label,
+                        data: data,
+                        backgroundColor: backgroundColor,
+                        borderColor: backgroundColor.replace('0.5', '1'),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            };
+            
+            if (canvasId === 'dailyChart') {
+                dailyChart = new Chart(ctx, config);
+            } else {
+                hourlyChart = new Chart(ctx, config);
+            }
+        }
+
+        async function checkIpInfo() {
+            const ip = document.getElementById('ipInput').value.trim();
+            if (!ip) {
+                alert('Please enter an IP address');
+                return;
+            }
+
+            document.getElementById('ipInfo').innerHTML = '<p class="loading">Checking IP information...</p>';
+            
+            await fetch(`/api/get_stats?ip=${ip}`)
+                .then(response => {
+                    if (!response.ok) throw new Error('Network response was not ok');
+                    return response.json();
+                })
+                .then(data => {
+                    let infoHtml = `
+                        <h3>IP Information: ${ip}</h3>
+                        <p><strong>ASN:</strong> ${data.asn || 'Not available'}</p>
+                        <p><strong>Network Name:</strong> ${data.name || 'Not available'}</p>
+                        <p><strong>Country:</strong> ${data.country || 'Not available'}</p>
+                    `;
+                    document.getElementById('ipInfo').innerHTML = infoHtml;
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    document.getElementById('ipInfo').innerHTML = 
+                        `<p class="error">Error: ${error.message}</p>`;
+                });
+        }
+    </script>
+</body>
+</html>

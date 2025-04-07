@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Upload Apache Log</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 40px;
+    }
+    h1 {
+      text-align: center;
+    }
+    input[type="file"] {
+      display: block;
+      margin: 20px 0;
+    }
+    .method-select {
+      margin: 10px 0;
+    }
+    button {
+      background-color: #4CAF50;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    .status {
+      margin-top: 20px;
+      font-style: italic;
+    }
+    .progress-container {
+      width: 100%;
+      background-color: #f1f1f1;
+      border-radius: 4px;
+      margin: 10px 0;
+      display: none;
+    }
+    .progress-bar {
+      height: 20px;
+      border-radius: 4px;
+      background-color: #4CAF50;
+      width: 0%;
+      transition: width 0.3s;
+      text-align: center;
+      line-height: 20px;
+      color: white;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Upload Apache Log File</h1>
+  
+  <label for="uploadMethod">Choose upload method:</label>
+  <select id="uploadMethod" class="method-select">
+    <option value="fetch">Fetch API</option>
+    <option value="xhr">XMLHttpRequest (XHR)</option>
+  </select>
+  
+  <input type="file" id="logFile" />
+  <button onclick="uploadFile()" id="uploadBtn">Upload</button>
+
+  <div class="progress-container" id="progressContainer">
+    <div class="progress-bar" id="progressBar">0%</div>
+  </div>
+
+  <div class="status" id="statusMsg"></div>
+
+  <script>
+    function uploadFile() {
+      const method = document.getElementById("uploadMethod").value;
+      const fileInput = document.getElementById("logFile");
+      const status = document.getElementById("statusMsg");
+      const progressContainer = document.getElementById("progressContainer");
+      const progressBar = document.getElementById("progressBar");
+      const uploadBtn = document.getElementById("uploadBtn");
+
+      if (!fileInput.files.length) {
+        status.textContent = "Please select a file.";
+        return;
+      }
+
+      const file = fileInput.files[0];
+      const formData = new FormData();
+      formData.append("logfile", file);
+
+      status.textContent = "Uploading...";
+      progressContainer.style.display = "block";
+      progressBar.style.width = "0%";
+      progressBar.textContent = "0%";
+      uploadBtn.disabled = true;
+
+      if (method === "fetch") {
+        // Fetch API не поддерживает отслеживание прогресса, поэтому используем XHR для этого
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/upload", true);
+        
+        xhr.upload.onprogress = function(e) {
+          if (e.lengthComputable) {
+            const percentComplete = (e.loaded / e.total) * 100;
+            progressBar.style.width = percentComplete + "%";
+            progressBar.textContent = Math.round(percentComplete) + "%";
+          }
+        };
+        
+        xhr.onreadystatechange = function() {
+          if (xhr.readyState === 4) {
+            uploadBtn.disabled = false;
+            if (xhr.status === 200) {
+              const response = JSON.parse(xhr.responseText);
+              status.textContent = `Success: ${response.message}`;
+            } else {
+              status.textContent = `Error: ${xhr.statusText}`;
+              progressBar.style.backgroundColor = "#f44336";
+            }
+          }
+        };
+        
+        xhr.send(formData);
+
+      } else if (method === "xhr") {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/upload", true);
+        
+        xhr.upload.onprogress = function(e) {
+          if (e.lengthComputable) {
+            const percentComplete = (e.loaded / e.total) * 100;
+            progressBar.style.width = percentComplete + "%";
+            progressBar.textContent = Math.round(percentComplete) + "%";
+          }
+        };
+        
+        xhr.onreadystatechange = function () {
+          if (xhr.readyState === 4) {
+            uploadBtn.disabled = false;
+            if (xhr.status === 200) {
+              const response = JSON.parse(xhr.responseText);
+              status.textContent = `Success: ${response.message}`;
+            } else {
+              status.textContent = `Error: ${xhr.statusText}`;
+              progressBar.style.backgroundColor = "#f44336";
+            }
+          }
+        };
+        xhr.send(formData);
+      }
+    }
+  </script>
+</body>
+</html>
