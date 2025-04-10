@@ -78,6 +78,10 @@
   <div class="status" id="statusMsg"></div>
 
   <script>
+
+    const MAX_SIZE_MB = 10;
+    const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
+
     function uploadFile() {
       const method = document.getElementById("uploadMethod").value;
       const fileInput = document.getElementById("logFile");
@@ -87,11 +91,17 @@
       const uploadBtn = document.getElementById("uploadBtn");
 
       if (!fileInput.files.length) {
-        status.textContent = "Please select a file.";
+        status.textContent = `Please select a file (Max size: ${MAX_SIZE_MB} MB).`;
         return;
       }
 
       const file = fileInput.files[0];
+      
+      if (file.size > MAX_SIZE_BYTES) {
+        status.textContent = `Error: File size exceeds ${MAX_SIZE_MB} MB limit.`;
+        return;
+      }
+
       const formData = new FormData();
       formData.append("logfile", file);
 
